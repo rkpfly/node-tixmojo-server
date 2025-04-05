@@ -1,0 +1,10 @@
+{
+  "verbose": true,
+  "ignore": ["node_modules", "*.test.js"],
+  "watch": ["server.js", "routes/", "controllers/", "middleware/", "data/", "utils/"],
+  "ext": "js,json",
+  "delay": "500",
+  "env": {
+    "NODE_ENV": "development"
+  }
+}
