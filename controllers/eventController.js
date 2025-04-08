@@ -37,7 +37,7 @@ const locationDetails = {
 const getAllEvents = (req, res) => {
   try {
     const location = req.query.location || 'Sydney';
-    
+
     // Capitalize first letter for consistency
     const formattedLocation = location.charAt(0).toUpperCase() + location.slice(1).toLowerCase();
     
@@ -117,14 +117,14 @@ const getEventById = (req, res) => {
     if (!event) {
       return sendError(res, 404, 'Event not found');
     }
-    
+
     // Make sure tags exist and are always returned as an array
     if (!event.tags) {
       event.tags = ["Featured Event"];
     } else if (!Array.isArray(event.tags)) {
       event.tags = [event.tags];
     }
-    
+
     // Fetch organizer details if available
     if (event.organizerId && organizers[event.organizerId]) {
       // Replace organizerId with full organizer details
@@ -137,7 +137,7 @@ const getEventById = (req, res) => {
         ticketsSold: "5k+"
       };
     }
-    
+
     return sendSuccess(res, event);
   } catch (error) {
     console.error('Error getting event:', error);
@@ -176,7 +176,7 @@ const getLocations = (req, res) => {
 const getRawEvents = (req, res) => {
   try {
     const location = req.query.location || 'Sydney';
-    
+
     // Capitalize first letter for consistency
     const formattedLocation = location.charAt(0).toUpperCase() + location.slice(1).toLowerCase();
     
@@ -201,11 +201,11 @@ const getRawEvents = (req, res) => {
 const getLocationSpecificEvents = (req, res) => {
   try {
     const { location } = req.params;
-    
+
     if (!location) {
       return sendError(res, 400, 'Location parameter is required');
     }
-    
+
     // Capitalize first letter for consistency
     const formattedLocation = location.charAt(0).toUpperCase() + location.slice(1).toLowerCase();
     
@@ -257,7 +257,7 @@ const getLocationDetails = (req, res) => {
 const getEventsByOrganizer = (req, res) => {
   try {
     const { organizerId } = req.params;
-    
+
     if (!organizerId) {
       return sendError(res, 400, 'Organizer ID parameter is required');
     }
@@ -318,7 +318,7 @@ const getAllAppData = (req, res) => {
         [...new Set(spotlightEvents.map(event => event.eventLocation))]
       ).filter((value, index, self) => self.indexOf(value) === index) // Remove duplicates
     };
-    
+
     return sendSuccess(res, response);
   } catch (error) {
     console.error('Error getting all app data:', error);
