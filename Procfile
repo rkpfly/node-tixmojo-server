@@ -1,0 +1,1 @@
+web: node use-railway-workaround.js && node server.js

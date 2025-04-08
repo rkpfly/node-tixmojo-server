@@ -1,56 +1,45 @@
-const { spotlightEvents, flyerData, locationEvents, organizers } = require('../data/events');
+const { formatDate, formatFullDate } = require('../data/events');
 const { sendSuccess, sendError } = require('../utils/responseUtils');
-
-// Event location details with additional data
-const locationDetails = {
-  "Sydney": {
-    title: "Events in Sydney",
-    subtitle: "Discover the most popular events happening in Sydney right now",
-    image: "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?q=80&w=2070&auto=format&fit=crop",
-    description: "Sydney, capital of New South Wales and one of Australia's largest cities, is known for its vibrant arts scene and iconic harbour. Experience world-class entertainment, dining, and cultural events throughout the year."
-  },
-  "Melbourne": {
-    title: "Events in Melbourne",
-    subtitle: "Explore Melbourne's thriving cultural and entertainment scene",
-    image: "https://images.unsplash.com/photo-1514395462725-fb4566210144?q=80&w=2071&auto=format&fit=crop",
-    description: "Melbourne, Australia's cultural capital, is home to vibrant arts, music, and food scenes. Discover hidden laneways, world-class galleries, and exciting events year-round."
-  },
-  "Brisbane": {
-    title: "Events in Brisbane",
-    subtitle: "Find the best entertainment options in Queensland's capital",
-    image: "https://images.unsplash.com/photo-1629947487869-4e2ae7d2d724?q=80&w=2070&auto=format&fit=crop",
-    description: "Brisbane offers a perfect blend of urban sophistication and outdoor adventure. Enjoy vibrant cultural events, riverside dining, and a thriving arts scene in this sun-soaked Queensland capital."
-  },
-  "Singapore": {
-    title: "Events in Singapore",
-    subtitle: "Experience the best of Singapore's entertainment calendar",
-    image: "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?q=80&w=2070&auto=format&fit=crop",
-    description: "Singapore, a global city with a rich cultural tapestry, offers year-round events ranging from international festivals to local celebrations, all set against a backdrop of futuristic architecture and lush gardens."
-  }
-};
+const { connectToDatabase } = require('../utils/db');
 
 /**
  * Get all events
  * @param {object} req - Express request object
  * @param {object} res - Express response object
  */
-const getAllEvents = (req, res) => {
+const getAllEvents = async (req, res) => {
+  let client;
+
   try {
     const location = req.query.location || 'Sydney';
 
     // Capitalize first letter for consistency
     const formattedLocation = location.charAt(0).toUpperCase() + location.slice(1).toLowerCase();
     
-    // Check if we have events for this location
-    if (locationEvents && locationEvents[formattedLocation]) {
-      return sendSuccess(res, locationEvents[formattedLocation]);
-    } else {
-      // If no specific events exist for this location, return empty array
-      return sendSuccess(res, []);
-    }
+    // Connect to MongoDB
+    const connection = await connectToDatabase();
+    const db = connection.db;
+    client = connection.client;
+
+    // Get events for this location
+    const events = await db.collection('events').find({
+      eventLocation: formattedLocation,
+      eventType: 'location'
+    }).toArray();
+
+    return sendSuccess(res, events);
   } catch (error) {
     console.error('Error getting events:', error);
     return sendError(res, 500, 'Failed to get events', error);
+  } finally {
+    // Close the client connection if it exists
+    if (client) {
+      try {
+        await client.close();
+      } catch (err) {
+        console.error('Error closing MongoDB connection:', err);
+      }
+    }
   }
 };
 
@@ -59,19 +48,42 @@ const getAllEvents = (req, res) => {
  * @param {object} req - Express request object
  * @param {object} res - Express response object
  */
-const getSpotlightEvents = (req, res) => {
+const getSpotlightEvents = async (req, res) => {
+  let client;
+
   try {
-    const location = req.query.location || 'Sydney';
+    const location = req.query.location;
     
-    // Filter events by location if provided
-    const filteredEvents = spotlightEvents.filter(event => 
-      !location || event.eventLocation.toLowerCase() === location.toLowerCase()
-    );
+    // Connect to MongoDB
+    const connection = await connectToDatabase();
+    const db = connection.db;
+    client = connection.client;
+
+    // Base query to get spotlight events
+    const query = { eventType: 'spotlight' };
+
+    // Add location filter if provided
+    if (location) {
+      query.eventLocation = location.toLowerCase() === location ?
+        location : location.charAt(0).toUpperCase() + location.slice(1).toLowerCase();
+    }
+
+    // Get spotlight events
+    const spotlightEvents = await db.collection('events').find(query).toArray();
     
-    return sendSuccess(res, filteredEvents);
+    return sendSuccess(res, spotlightEvents);
   } catch (error) {
     console.error('Error getting spotlight events:', error);
     return sendError(res, 500, 'Failed to get spotlight events', error);
+  } finally {
+    // Close the client connection if it exists
+    if (client) {
+      try {
+        await client.close();
+      } catch (err) {
+        console.error('Error closing MongoDB connection:', err);
+      }
+    }
   }
 };
 
@@ -80,12 +92,31 @@ const getSpotlightEvents = (req, res) => {
  * @param {object} req - Express request object
  * @param {object} res - Express response object
  */
-const getFlyers = (req, res) => {
+const getFlyers = async (req, res) => {
+  let client;
+
   try {
-    return sendSuccess(res, flyerData);
+    // Connect to MongoDB
+    const connection = await connectToDatabase();
+    const db = connection.db;
+    client = connection.client;
+
+    // Get flyers
+    const flyers = await db.collection('flyers').find({}).toArray();
+
+    return sendSuccess(res, flyers);
   } catch (error) {
     console.error('Error getting flyers:', error);
     return sendError(res, 500, 'Failed to get flyers', error);
+  } finally {
+    // Close the client connection if it exists
+    if (client) {
+      try {
+        await client.close();
+      } catch (err) {
+        console.error('Error closing MongoDB connection:', err);
+      }
+    }
   }
 };
 
@@ -94,26 +125,21 @@ const getFlyers = (req, res) => {
  * @param {object} req - Express request object
  * @param {object} res - Express response object
  */
-const getEventById = (req, res) => {
+const getEventById = async (req, res) => {
+  let client;
+
   try {
     const { id } = req.params;
     
-    let event = null;
-    
-    // Check spotlight events first
-    event = spotlightEvents.find(event => event.id === id);
-    
-    // If not found, check location-specific events
-    if (!event && locationEvents) {
-      Object.values(locationEvents).forEach(locationEventList => {
-        const foundEvent = locationEventList.find(event => event.id === id);
-        if (foundEvent) {
-          event = foundEvent;
-        }
-      });
-    }
-    
-    // If still not found, return 404
+    // Connect to MongoDB
+    const connection = await connectToDatabase();
+    const db = connection.db;
+    client = connection.client;
+
+    // Get event by ID
+    const event = await db.collection('events').findOne({ id });
+
+    // If not found, return 404
     if (!event) {
       return sendError(res, 404, 'Event not found');
     }
@@ -126,22 +152,29 @@ const getEventById = (req, res) => {
     }
 
     // Fetch organizer details if available
-    if (event.organizerId && organizers[event.organizerId]) {
+    if (event.organizerId) {
+      // Get organizer details
+      const organizer = await db.collection('organizers').findOne({ id: event.organizerId });
+
+      if (organizer) {
       // Replace organizerId with full organizer details
-      event.organizer = organizers[event.organizerId];
-      
-      // Add organizer stats
-      event.organizer.stats = {
-        totalEvents: 24,
-        rating: 4.9,
-        ticketsSold: "5k+"
-      };
+        event.organizer = organizer;
+      }
     }
 
     return sendSuccess(res, event);
   } catch (error) {
     console.error('Error getting event:', error);
     return sendError(res, 500, 'Failed to get event', error);
+  } finally {
+    // Close the client connection if it exists
+    if (client) {
+      try {
+        await client.close();
+      } catch (err) {
+        console.error('Error closing MongoDB connection:', err);
+      }
+    }
   }
 };
 
@@ -150,46 +183,78 @@ const getEventById = (req, res) => {
  * @param {object} req - Express request object
  * @param {object} res - Express response object
  */
-const getLocations = (req, res) => {
+const getLocations = async (req, res) => {
+  let client;
+
   try {
-    // Get locations from locationEvents object keys
-    const locationsFromKeys = Object.keys(locationEvents || {});
+    // Connect to MongoDB
+    const connection = await connectToDatabase();
+    const db = connection.db;
+    client = connection.client;
+
+    // Get locations from locations collection
+    const locations = await db.collection('locations').find({}).toArray();
+    const locationNames = locations.map(location => location.name);
     
-    // Extract unique locations from spotlight events
-    const locationsFromSpotlight = [...new Set(spotlightEvents.map(event => event.eventLocation))];
+    // Also get unique locations from events collection
+    const eventLocations = await db.collection('events').distinct('eventLocation');
     
-    // Combine and deduplicate locations
-    const locations = [...new Set([...locationsFromKeys, ...locationsFromSpotlight])];
+    // Combine and deduplicate
+    const allLocations = [...new Set([...locationNames, ...eventLocations])];
     
-    return sendSuccess(res, locations);
+    return sendSuccess(res, allLocations);
   } catch (error) {
     console.error('Error getting locations:', error);
     return sendError(res, 500, 'Failed to get locations', error);
+  } finally {
+    // Close the client connection if it exists
+    if (client) {
+      try {
+        await client.close();
+      } catch (err) {
+        console.error('Error closing MongoDB connection:', err);
+      }
+    }
   }
 };
 
 /**
- * Get raw events data from locationEvents
+ * Get raw events data
  * @param {object} req - Express request object
  * @param {object} res - Express response object
  */
-const getRawEvents = (req, res) => {
+const getRawEvents = async (req, res) => {
+  let client;
+
   try {
     const location = req.query.location || 'Sydney';
 
     // Capitalize first letter for consistency
     const formattedLocation = location.charAt(0).toUpperCase() + location.slice(1).toLowerCase();
     
-    // Get events for the requested location
-    if (locationEvents && locationEvents[formattedLocation]) {
-      return sendSuccess(res, locationEvents[formattedLocation]);
-    } else {
-      // Return empty array if no events for this location
-      return sendSuccess(res, []);
-    }
+    // Connect to MongoDB
+    const connection = await connectToDatabase();
+    const db = connection.db;
+    client = connection.client;
+
+    // Get events for this location
+    const events = await db.collection('events').find({
+      eventLocation: formattedLocation
+    }).toArray();
+
+    return sendSuccess(res, events);
   } catch (error) {
     console.error('Error getting raw events data:', error);
     return sendError(res, 500, 'Failed to get raw events data', error);
+  } finally {
+    // Close the client connection if it exists
+    if (client) {
+      try {
+        await client.close();
+      } catch (err) {
+        console.error('Error closing MongoDB connection:', err);
+      }
+    }
   }
 };
 
@@ -198,7 +263,9 @@ const getRawEvents = (req, res) => {
  * @param {object} req - Express request object
  * @param {object} res - Express response object
  */
-const getLocationSpecificEvents = (req, res) => {
+const getLocationSpecificEvents = async (req, res) => {
+  let client;
+
   try {
     const { location } = req.params;
 
@@ -209,16 +276,29 @@ const getLocationSpecificEvents = (req, res) => {
     // Capitalize first letter for consistency
     const formattedLocation = location.charAt(0).toUpperCase() + location.slice(1).toLowerCase();
     
-    // Check if we have events for this location
-    if (locationEvents && locationEvents[formattedLocation]) {
-      return sendSuccess(res, locationEvents[formattedLocation]);
-    } else {
-      // Return an empty array if no location events exist
-      return sendSuccess(res, []);
-    }
+    // Connect to MongoDB
+    const connection = await connectToDatabase();
+    const db = connection.db;
+    client = connection.client;
+
+    // Get events for this location
+    const events = await db.collection('events').find({
+      eventLocation: formattedLocation
+    }).toArray();
+
+    return sendSuccess(res, events);
   } catch (error) {
     console.error('Error getting location-specific events:', error);
     return sendError(res, 500, 'Failed to get location events', error);
+  } finally {
+    // Close the client connection if it exists
+    if (client) {
+      try {
+        await client.close();
+      } catch (err) {
+        console.error('Error closing MongoDB connection:', err);
+      }
+    }
   }
 };
 
@@ -227,25 +307,94 @@ const getLocationSpecificEvents = (req, res) => {
  * @param {object} req - Express request object
  * @param {object} res - Express response object
  */
-const getLocationDetails = (req, res) => {
+const getLocationDetails = async (req, res) => {
+  let client;
+
   try {
     const { location } = req.params;
     
-    // Get details for the requested location
-    if (location && locationDetails[location]) {
-      return sendSuccess(res, locationDetails[location]);
-    } 
-    // If location is not specified or not found, return all locations data
-    else if (!location) {
+    // Connect to MongoDB
+    const connection = await connectToDatabase();
+    const db = connection.db;
+    client = connection.client;
+
+    // Get location details
+    if (location) {
+      // Convert location to lowercase for case-insensitive matching
+      const locationLower = location.toLowerCase();
+      
+      // First try to find by exact ID match
+      let locationDetails = await db.collection('locationDetails').findOne({ id: locationLower });
+      
+      // If not found, try case-insensitive search
+      if (!locationDetails) {
+        locationDetails = await db.collection('locationDetails').findOne({ 
+          id: { $regex: new RegExp(`^${locationLower}$`, 'i') } 
+        });
+      }
+      
+      // Additional fallback: try to find by name instead of id
+      if (!locationDetails) {
+        locationDetails = await db.collection('locationDetails').findOne({ 
+          name: { $regex: new RegExp(`^${location}$`, 'i') } 
+        });
+      }
+      
+      // If still not found, try to find by location from 'locations' collection
+      if (!locationDetails) {
+        const locationFromList = await db.collection('locations').findOne({ 
+          name: { $regex: new RegExp(`^${location}$`, 'i') } 
+        });
+        
+        if (locationFromList) {
+          // Create a basic location details object
+          locationDetails = {
+            id: locationFromList.name.toLowerCase(),
+            name: locationFromList.name,
+            title: 'Events in',
+            subtitle: `Discover the most popular events happening in ${locationFromList.name} right now`,
+            description: `Explore all upcoming events in ${locationFromList.name}`
+          };
+        }
+      }
+
+      // If not found after all attempts, return fallback data rather than 404
+      if (!locationDetails) {
+        console.log(`Location details not found for: ${location}, providing fallback data`);
+        locationDetails = {
+          id: location.toLowerCase(),
+          name: location,
+          title: 'Events in',
+          subtitle: `Discover the most popular events happening in ${location} right now`,
+          description: `Explore all upcoming events in ${location}`
+        };
+      }
+
       return sendSuccess(res, locationDetails);
-    }
-    // Location not found
-    else {
-      return sendError(res, 404, 'Location details not found');
+    } else {
+      // Get all location details
+      const locationDetails = await db.collection('locationDetails').find({}).toArray();
+
+      // Convert to object with location ID as key
+      const locationDetailsObj = locationDetails.reduce((acc, location) => {
+        acc[location.id] = location;
+        return acc;
+      }, {});
+
+      return sendSuccess(res, locationDetailsObj);
     }
   } catch (error) {
     console.error('Error getting location details:', error);
     return sendError(res, 500, 'Failed to get location details', error);
+  } finally {
+    // Close the client connection if it exists
+    if (client) {
+      try {
+        await client.close();
+      } catch (err) {
+        console.error('Error closing MongoDB connection:', err);
+      }
+    }
   }
 };
 
@@ -254,7 +403,9 @@ const getLocationDetails = (req, res) => {
  * @param {object} req - Express request object
  * @param {object} res - Express response object
  */
-const getEventsByOrganizer = (req, res) => {
+const getEventsByOrganizer = async (req, res) => {
+  let client;
+
   try {
     const { organizerId } = req.params;
 
@@ -262,32 +413,29 @@ const getEventsByOrganizer = (req, res) => {
       return sendError(res, 400, 'Organizer ID parameter is required');
     }
     
-    // Find all events from this organizer across all locations and spotlight events
-    let organizerEvents = [];
+    // Connect to MongoDB
+    const connection = await connectToDatabase();
+    const db = connection.db;
+    client = connection.client;
+
+    // Get events for this organizer
+    const events = await db.collection('events').find({
+      organizerId: organizerId
+    }).toArray();
     
-    // Check spotlight events
-    const spotlightOrganizerEvents = spotlightEvents.filter(event => event.organizerId === organizerId);
-    organizerEvents = [...organizerEvents, ...spotlightOrganizerEvents];
-    
-    // Check location-specific events
-    if (locationEvents) {
-      Object.values(locationEvents).forEach(locationEventList => {
-        const foundEvents = locationEventList.filter(event => event.organizerId === organizerId);
-        if (foundEvents.length > 0) {
-          organizerEvents = [...organizerEvents, ...foundEvents];
-        }
-      });
-    }
-    
-    // Remove duplicates (in case an event appears in both spotlight and location events)
-    organizerEvents = organizerEvents.filter((event, index, self) => 
-      index === self.findIndex(e => e.id === event.id)
-    );
-    
-    return sendSuccess(res, organizerEvents);
+    return sendSuccess(res, events);
   } catch (error) {
     console.error('Error getting events by organizer:', error);
     return sendError(res, 500, 'Failed to get events by organizer', error);
+  } finally {
+    // Close the client connection if it exists
+    if (client) {
+      try {
+        await client.close();
+      } catch (err) {
+        console.error('Error closing MongoDB connection:', err);
+      }
+    }
   }
 };
 
@@ -296,33 +444,67 @@ const getEventsByOrganizer = (req, res) => {
  * @param {object} req - Express request object
  * @param {object} res - Express response object
  */
-const getAllAppData = (req, res) => {
+const getAllAppData = async (req, res) => {
+  let client;
+
   try {
-    // Compile all necessary data in a single response
+    // Connect to MongoDB
+    const connection = await connectToDatabase();
+    const db = connection.db;
+    client = connection.client;
+
+    // Get all data in parallel
+    const [events, spotlightEvents, flyers, locationDetails, locations] = await Promise.all([
+      db.collection('events').find({}).toArray(),
+      db.collection('events').find({ eventType: 'spotlight' }).toArray(),
+      db.collection('flyers').find({}).toArray(),
+      db.collection('locationDetails').find({}).toArray(),
+      db.collection('locations').find({}).toArray()
+    ]);
+
+    // Group events by location
+    const locationEventsMap = events
+      .filter(event => event.eventLocation && event.eventType !== 'spotlight')
+      .reduce((map, event) => {
+        const location = event.eventLocation;
+        if (!map[location]) {
+          map[location] = [];
+        }
+        map[location].push(event);
+        return map;
+      }, {});
+
+    // Convert location details to object with location as key
+    const locationDetailsObj = locationDetails.reduce((acc, location) => {
+      acc[location.id] = location;
+      return acc;
+    }, {});
+
+    // Extract location names
+    const locationNames = locations.map(location => location.name);
+
+    // Compile response
     const response = {
-      // Get all location-specific events
-      locationEvents: locationEvents,
-      
-      // Include spotlight events
-      spotlightEvents: spotlightEvents,
-      
-      // Include flyer data for carousels
-      flyerData: flyerData,
-      
-      // Include location metadata
-      locationDetails: locationDetails,
-      
-      // Include available locations list
-      locations: Object.keys(locationEvents).concat(
-        // Extract unique locations from spotlight events that might not be in locationEvents
-        [...new Set(spotlightEvents.map(event => event.eventLocation))]
-      ).filter((value, index, self) => self.indexOf(value) === index) // Remove duplicates
+      locationEvents: locationEventsMap,
+      spotlightEvents,
+      flyerData: flyers,
+      locationDetails: locationDetailsObj,
+      locations: locationNames
     };
 
     return sendSuccess(res, response);
   } catch (error) {
     console.error('Error getting all app data:', error);
     return sendError(res, 500, 'Failed to get application data', error);
+  } finally {
+    // Close the client connection if it exists
+    if (client) {
+      try {
+        await client.close();
+      } catch (err) {
+        console.error('Error closing MongoDB connection:', err);
+      }
+    }
   }
 };
 

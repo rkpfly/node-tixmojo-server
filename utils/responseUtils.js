@@ -33,32 +33,7 @@ const sendError = (res, statusCode = 500, message = 'Server Error', error = null
   return res.status(statusCode).json(response);
 };
 
-/**
- * Respond with success
- * Alternative naming convention used in payment controller
- */
-const respondWithSuccess = (res, data, statusCode = 200) => {
-  return res.status(statusCode).json({
-    success: true,
-    data
-  });
-};
-
-/**
- * Respond with error
- * Alternative naming convention used in payment controller
- */
-const respondWithError = (res, message, statusCode = 500, extras = {}) => {
-  return res.status(statusCode).json({
-    success: false,
-    message,
-    ...extras
-  });
-};
-
 module.exports = {
   sendSuccess,
-  sendError,
-  respondWithSuccess,
-  respondWithError
+  sendError
 };

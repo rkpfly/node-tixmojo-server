@@ -10,7 +10,6 @@ const phoneService = require('../services/phoneService');
 // Validate payment-related data
 const validatePaymentData = (data) => {
   const errors = [];
-  
   // Validate firstName
   if (!data.firstName || typeof data.firstName !== 'string') {
     errors.push({ field: 'firstName', message: 'First name is required' });
