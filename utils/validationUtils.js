@@ -1,11 +1,13 @@
 /**
  * Validation Utilities
  * 
- * Server-side validation functions for payment processing and SSR
+ * Server-side validation functions for payment processing, user management, and SSR
+ * Enhanced with MatrixCMS validation patterns
  */
 
 // Import phone service for enhanced validation
 const phoneService = require('../services/phoneService');
+const { BadRequestError } = require('./error');
 
 // Validate payment-related data
 const validatePaymentData = (data) => {
@@ -226,7 +228,80 @@ const sanitizeInput = (input) => {
     .trim();
 };
 
+/**
+ * Validate that all required fields are present in the request body
+ * @param {object} body - Request body to validate
+ * @param {Array<string>} requiredFields - Array of field names that are required
+ * @throws {BadRequestError} If any required field is missing
+ */
+const validateRequiredFields = (body, requiredFields) => {
+  const missingFields = requiredFields.filter(field => !body[field]);
+  
+  if (missingFields.length > 0) {
+    throw BadRequestError(`Missing required fields: ${missingFields.join(', ')}`);
+  }
+};
+
+/**
+ * Validate password strength
+ * @param {string} password - Password to validate
+ * @param {object} options - Validation options
+ * @param {number} options.minLength - Minimum password length (default: 8)
+ * @param {boolean} options.requireLowercase - Whether lowercase letters are required (default: true)
+ * @param {boolean} options.requireUppercase - Whether uppercase letters are required (default: true)
+ * @param {boolean} options.requireNumbers - Whether numbers are required (default: true)
+ * @param {boolean} options.requireSpecialChars - Whether special characters are required (default: true)
+ * @returns {object} - Validation result with isValid and message properties
+ */
+const validatePassword = (password, options = {}) => {
+  const {
+    minLength = 8,
+    requireLowercase = true,
+    requireUppercase = true,
+    requireNumbers = true,
+    requireSpecialChars = true
+  } = options;
+  
+  const result = {
+    isValid: true,
+    message: 'Password is valid'
+  };
+  
+  if (!password || password.length < minLength) {
+    result.isValid = false;
+    result.message = `Password must be at least ${minLength} characters long`;
+    return result;
+  }
+  
+  if (requireLowercase && !/[a-z]/.test(password)) {
+    result.isValid = false;
+    result.message = 'Password must contain at least one lowercase letter';
+    return result;
+  }
+  
+  if (requireUppercase && !/[A-Z]/.test(password)) {
+    result.isValid = false;
+    result.message = 'Password must contain at least one uppercase letter';
+    return result;
+  }
+  
+  if (requireNumbers && !/\d/.test(password)) {
+    result.isValid = false;
+    result.message = 'Password must contain at least one number';
+    return result;
+  }
+  
+  if (requireSpecialChars && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    result.isValid = false;
+    result.message = 'Password must contain at least one special character';
+    return result;
+  }
+  
+  return result;
+};
+
 module.exports = {
+  // Original validators
   validatePaymentData,
   validateCreditCardData,
   isValidEmail,
@@ -237,5 +312,9 @@ module.exports = {
   isValidExpiryDate,
   isValidCVV,
   safeJsonParse,
-  sanitizeInput
+  sanitizeInput,
+  
+  // MatrixCMS pattern validators
+  validateRequiredFields,
+  validatePassword
 };

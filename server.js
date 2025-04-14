@@ -3,9 +3,16 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
-const logger = require('./middleware/logger');
+const cookieParser = require('cookie-parser');
+const Logger = require('./utils/logger');
+const { connectToDatabase } = require('./utils/db');
+
+// Route imports
 const eventRoutes = require('./routes/eventRoutes');
 const dataRoutes = require('./routes/dataRoutes');
+const stripeRoutes = require('./routes/stripeRoutes');
+const phoneRoutes = require('./routes/phoneRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 // Load environment variables
 require('dotenv').config();
@@ -16,57 +23,107 @@ const app = express();
 // Set port
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Configure middlewares
 app.use(helmet()); // Security headers
 
-// Configure CORS to allow access from all origins in development
-// In production, you would specify exact origins for security
+// Configure CORS
 const corsOptions = {
-  origin: true, // Allow all origins for debugging
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  origin: true, // Allow all origins in development
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   maxAge: 86400 // Cache preflight requests for 24 hours
 };
-app.use(cors(corsOptions)); // Enable CORS with options
+app.use(cors(corsOptions));
 
-app.use(express.json()); // Parse JSON requests
+// Body parser middlewares
+app.use(express.json({ limit: '30mb' }));
+app.use(express.urlencoded({ limit: '30mb', extended: true }));
+
+// Cookie parser
+app.use(cookieParser());
+
+// Static files
+app.use('/public', express.static('public'));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Logging
 app.use(morgan('dev')); // HTTP request logger
-app.use(logger); // Custom logger
+
+// Connect to database
+connectToDatabase()
+  .then(() => {
+    Logger.info('MongoDB connection established successfully');
+  })
+  .catch((err) => {
+    Logger.error(`Database connection error: ${err.message}`);
+  });
 
 // Routes
 app.use('/api/events', eventRoutes);
+app.use('/api/payments', stripeRoutes);
+app.use('/api/phone', phoneRoutes);
+app.use('/api/users', userRoutes);
 app.use('/getData', dataRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'UP', timestamp: new Date() });
+  res.status(200).json({ 
+    status: 'UP', 
+    timestamp: new Date(),
+    version: process.env.npm_package_version || '1.0.0' 
+  });
+});
+
+// Route tracing middleware for debugging
+app.use((req, res, next) => {
+  Logger.debug(`Route hit: ${req.method}:${req.originalUrl}`);
+  next();
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
+  const errorStatus = err.status || 500;
+  const errorMessage = err.message || 'Something went wrong';
+  
+  // Log the error
+  Logger.error({
     success: false,
-    message: 'Internal Server Error',
-    error: process.env.NODE_ENV === 'production' ? null : err.message
+    status: errorStatus,
+    message: errorMessage,
+    stack: err.stack
+  });
+  
+  // Send response
+  res.status(errorStatus).json({
+    success: false,
+    status: errorStatus,
+    message: errorMessage,
+    stack: process.env.NODE_ENV === 'production' ? null : err.stack
   });
 });
 
 // Start server
 const server = app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API available at http://localhost:${PORT}/api/events`);
-  console.log(`MongoDB endpoint available at http://localhost:${PORT}/getData`);
+  Logger.info(`Server running on port ${PORT}`);
+  Logger.info(`API available at http://localhost:${PORT}/api/events`);
 });
 
 // Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('Shutting down server...');
+process.on('SIGINT', async () => {
+  Logger.info('Shutting down server gracefully...');
   
-  // Close server
+  // Close server connections
   server.close(() => {
-    console.log('Server shut down complete');
+    Logger.info('Server shut down complete');
     process.exit(0);
   });
+  
+  // Force shutdown after 10 seconds if graceful shutdown fails
+  setTimeout(() => {
+    Logger.error('Forcing server shutdown after timeout');
+    process.exit(1);
+  }, 10000);
 });
+
+module.exports = app;
