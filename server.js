@@ -13,6 +13,7 @@ const dataRoutes = require('./routes/dataRoutes');
 const stripeRoutes = require('./routes/stripeRoutes');
 const phoneRoutes = require('./routes/phoneRoutes');
 const userRoutes = require('./routes/userRoutes');
+const aboutRoutes = require('./routes/aboutRoutes');
 
 // Load environment variables
 require('dotenv').config();
@@ -65,13 +66,14 @@ app.use('/api/payments', stripeRoutes);
 app.use('/api/phone', phoneRoutes);
 app.use('/api/users', userRoutes);
 app.use('/getData', dataRoutes);
+app.use('/api/about', aboutRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'UP', 
+  res.status(200).json({
+    status: 'UP',
     timestamp: new Date(),
-    version: process.env.npm_package_version || '1.0.0' 
+    version: process.env.npm_package_version || '1.0.0'
   });
 });
 
@@ -85,7 +87,7 @@ app.use((req, res, next) => {
 app.use((err, req, res, next) => {
   const errorStatus = err.status || 500;
   const errorMessage = err.message || 'Something went wrong';
-  
+
   // Log the error
   Logger.error({
     success: false,
@@ -93,7 +95,7 @@ app.use((err, req, res, next) => {
     message: errorMessage,
     stack: err.stack
   });
-  
+
   // Send response
   res.status(errorStatus).json({
     success: false,
@@ -112,13 +114,13 @@ const server = app.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGINT', async () => {
   Logger.info('Shutting down server gracefully...');
-  
+
   // Close server connections
   server.close(() => {
     Logger.info('Server shut down complete');
     process.exit(0);
   });
-  
+
   // Force shutdown after 10 seconds if graceful shutdown fails
   setTimeout(() => {
     Logger.error('Forcing server shutdown after timeout');
