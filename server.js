@@ -14,6 +14,9 @@ const stripeRoutes = require('./routes/stripeRoutes');
 const phoneRoutes = require('./routes/phoneRoutes');
 const userRoutes = require('./routes/userRoutes');
 const aboutRoutes = require('./routes/aboutRoutes');
+const contactRoutes = require('./routes/contactRoutes');
+const footerRoutes = require('./routes/footerRoutes');
+const pagenotfoundRoutes = require('./routes/pagenotfound');
 
 // Load environment variables
 require('dotenv').config();
@@ -67,6 +70,9 @@ app.use('/api/phone', phoneRoutes);
 app.use('/api/users', userRoutes);
 app.use('/getData', dataRoutes);
 app.use('/api/about', aboutRoutes);
+app.use('/api/contact', contactRoutes);
+app.use('/api/footer', footerRoutes);
+app.use('/api/page-not-found', pagenotfoundRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
